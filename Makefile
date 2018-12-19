@@ -340,10 +340,12 @@ clean:
 	@-rm $(SWAGGER_ENDPOINTS_SPEC)
 	( cd $(HTTP_APP) && $(MAKE) clean; )
 	@$(MAKE) multi-distclean
-	@rm -rf _build/system_test+test _build/system_test _build/test _build/prod _build/local
+	@rm -rf .eqc-info current_counterexample.eqc
+	@rm -rf _build/system_test+eqc+test _build/system_test+test+eqc _build/system_test+test _build/system_test _build/test+eqc _build/test _build/prod _build/local
 	@rm -rf _build/default/plugins
 	@rm -rf $$(ls -d _build/default/lib/* | grep -v '[^_]rocksdb') ## Dependency `rocksdb` takes long to build.
 
+## Do not delete `eqc`.
 distclean: clean
 	( cd otp_patches && $(MAKE) distclean; )
 	( cd $(HTTP_APP) && $(MAKE) distclean; )
@@ -390,6 +392,39 @@ internal-clean: $$(KIND)
 
 internal-distclean: $$(KIND)
 	@rm -rf ./_build/$(KIND)
+
+## Info re tests using QuickCheck.
+EQC_TEST_REPO = https://github.com/lucafavatella/epoch-eqc.git
+EQC_TEST_VERSION = 62ef1a8
+
+.PHONY: quickcheck-test
+quickcheck-test: eqc
+	$(MAKE) quickcheck-test-dir EQC_DIR=$</test/aecore
+	$(MAKE) quickcheck-test-dir EQC_DIR=$</test/aefate
+	$(MAKE) quickcheck-test-dir EQC_DIR=$</test/aens
+	$(MAKE) quickcheck-test-dir EQC_DIR=$</test/aeoracles
+	$(MAKE) quickcheck-test-dir EQC_DIR=$</test/aesophia
+	$(MAKE) quickcheck-test-dir EQC_DIR=$</test/aeutils
+
+.PHONY: quickcheck-test-dir
+quickcheck-test-dir:
+	$(REBAR) as test,eqc eqc --dir $(EQC_DIR)
+
+.PHONY: quickcheck-system-test
+quickcheck-system-test: eqc
+	$(REBAR) as system_test,test,eqc eqc --dir $</system-test/working
+
+.PHONY: quickcheck-system-test-not-working
+quickcheck-system-test-not-working: eqc
+	-$(REBAR) as system_test,test,eqc eqc --dir $</system-test/not_working
+
+.PHONY: eqc
+eqc: | eqc/.git
+	## TODO Re-fetch repo if version not found in local repo.
+	( cd $@ && git reset --quiet --soft $(EQC_TEST_VERSION) && git stash --quiet --all; )
+
+eqc/.git:
+	git clone --quiet --no-checkout $(EQC_TEST_REPO) $(@D)
 
 .PHONY: \
 	all console \
