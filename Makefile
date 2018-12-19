@@ -325,10 +325,13 @@ clean:
 	@-rm $(SWAGGER_ENDPOINTS_SPEC)
 	( cd $(HTTP_APP) && $(MAKE) clean; )
 	@$(MAKE) multi-distclean
-	@rm -rf _build/system_test+test _build/system_test _build/test _build/prod _build/local
+	@rm -rf .eqc-info current_counterexample.eqc
+	@rm -rf eqc-plain eqc-system-test
+	@rm -rf _build/system_test+eqc+test _build/system_test+test+eqc _build/system_test+test _build/system_test _build/test _build/prod _build/local
 	@rm -rf _build/default/plugins
 	@rm -rf $$(ls -d _build/default/lib/* | grep -v '[^_]rocksdb') ## Dependency `rocksdb` takes long to build.
 
+## Do not delete `eqc`.
 distclean: clean
 	( cd otp_patches && $(MAKE) distclean; )
 	( cd $(HTTP_APP) && $(MAKE) distclean; )
@@ -375,6 +378,37 @@ internal-clean: $$(KIND)
 
 internal-distclean: $$(KIND)
 	@rm -rf ./_build/$(KIND)
+
+## Info re tests using QuickCheck.
+EQC_TEST_REPO = https://github.com/Quviq/epoch-eqc.git
+EQC_TEST_VERSION = 7284e0ba029849ca9bb485b27cc0ac02495d205f
+EQC_ST_DIR = system-test
+
+.PHONY: quickcheck-system-test
+quickcheck-system-test: eqc-system-test
+	$(REBAR) as system_test,test,eqc eqc --dir no_eqc_dir
+
+.PHONY: eqc-plain
+eqc-plain: eqc
+	rsync --quiet --archive --delete --delete-excluded --exclude=$(EQC_ST_DIR) --exclude=.git $</ $@
+
+.PHONY: eqc-system-test
+eqc-system-test: eqc/$(EQC_ST_DIR)
+	mkdir -p $@
+	rsync --quiet --archive --delete $</ $@/src
+	## App with `eqc` among `applications` so to enable usage of EQC-related `-include_lib`s in the tests (e.g. in `system-test/transactions_eqc.erl` in EQC tests repo).
+	echo '{application, eqc_system_test, [{vsn, "0.1.0"}, {applications, [eqc]}]}.' > $@/src/eqc_system_test.app.src
+
+.PHONY: eqc/$(EQC_ST_DIR)
+eqc/$(EQC_ST_DIR): eqc ;
+
+.PHONY: eqc
+eqc: | eqc/.git
+	## TODO Re-fetch repo if version not found in local repo.
+	( cd $@ && git reset --quiet --soft $(EQC_TEST_VERSION) && git stash --quiet --all; )
+
+eqc/.git:
+	git clone --quiet --no-checkout $(EQC_TEST_REPO) $(@D)
 
 .PHONY: \
 	all console \
