@@ -131,13 +131,15 @@ set_config(Rules) ->
                 end).
 
 config_setup() ->
-    {ok, Apps} = application:ensure_all_started(exometer_core),
+    OldLoadedApps = application:loaded_applications(),
+    {ok, StartedApps} = application:ensure_all_started(exometer_core),
     create_metrics(),
     meck:new(aeu_env, [passthrough]),
-    {Apps, [aeu_env]}.
+    {OldLoadedApps, StartedApps, [aeu_env]}.
 
-cleanup({StartedApps, Mocks}) ->
+cleanup({OldLoadedApps, StartedApps, Mocks}) ->
     [application:stop(A) || A <- lists:reverse(StartedApps)],
+    lists:foreach(fun(A) -> ok = application:unload(A) end, application:loaded_applications() -- OldLoadedApps),
     [meck:unload(M) || M <- Mocks].
 
 create_metrics() ->
