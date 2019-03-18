@@ -38,7 +38,7 @@ running_applications() ->
     lists:map(fun({A,_,_}) -> A end, application:which_applications()).
 
 restore_stopped_and_unloaded_apps(OldRunningApps, OldLoadedApps) ->
-    restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, 10).
+    restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, 1).
 
 restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, 0) ->
     {error, {unexpectedly_running_apps(OldRunningApps), unexpectedly_loaded_apps(OldLoadedApps)}};
