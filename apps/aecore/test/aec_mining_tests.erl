@@ -19,8 +19,8 @@
 
 mine_block_test_() ->
     {foreach,
-      fun() -> setup() end,
-      fun(_) -> cleanup(unused_arg) end,
+      fun setup/0,
+      fun teardown/1,
       [
        {timeout, 60,
         {"Find a new block",
@@ -72,7 +72,8 @@ mine_block_test_() ->
       ]}.
 
 setup() ->
-    ok = meck:new(aeu_env, [passthrough]),
+    OldLoadedApps = [A || {A, _, _} <- application:loaded_applications()],
+    {ok, StartedApps} = application:ensure_all_started(aeutils),
     aec_test_utils:mock_fast_and_deterministic_cuckoo_pow(),
     aec_test_utils:start_chain_db(),
     application:start(crypto),
@@ -90,21 +91,16 @@ setup() ->
     meck:expect(aec_trees, hash, 1, <<123:32/unit:8>>),
     meck:expect(aec_trees, apply_txs_on_state_trees, 3, {ok, [], [], Trees}),
     meck:expect(aec_keys, pubkey, 0, {ok, ?TEST_PUB}),
-    ok.
+    {OldLoadedApps, StartedApps, [aec_blocks, aec_headers, aetx_sign, aec_governance, aec_keys, aec_trees, aeu_time]}.
 
 
-cleanup(_) ->
-    application:stop(crypto),
-    meck:unload(aec_blocks),
-    meck:unload(aec_headers),
-    meck:unload(aetx_sign),
-    meck:unload(aec_governance),
-    meck:unload(aec_keys),
-    meck:unload(aec_trees),
-    meck:unload(aeu_time),
+teardown({OldLoadedApps, StartedApps, Mocks}) ->
+    [meck:unload(M) || M <- Mocks],
     ok = aec_tx_pool:stop(),
     aec_test_utils:stop_chain_db(),
-    ok = meck:unload(aeu_env).
+    [application:stop(A) || A <- lists:reverse(StartedApps)],
+    [ok = application:unload(A) || A <- [A0 || {A0, _, _} <- application:loaded_applications()] -- OldLoadedApps],
+    ok.
 
 generate_valid_test_data(_TopBlock, Tries) when Tries < 1 ->
     could_not_find_nonce;
