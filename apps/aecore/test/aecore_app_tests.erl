@@ -41,24 +41,10 @@ loaded_apps() ->
     lists:map(fun({A,_,_}) -> A end, application:loaded_applications()).
 
 restore_stopped_and_unloaded_apps(OldRunningApps, OldLoadedApps) ->
-    restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, 1).
-
-restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, 0) ->
-    {error, {unexpectedly_running_apps(OldRunningApps), unexpectedly_loaded_apps(OldLoadedApps)}};
-restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, Attempts) ->
-    BadRunningApps = unexpectedly_running_apps(OldRunningApps),
-    BadLoadedApps = unexpectedly_loaded_apps(OldLoadedApps),
-    case lists:all(fun(A) -> application:stop(A) =:= ok end, BadRunningApps) andalso lists:all(fun(A) -> application:unload(A) =:= ok end, BadLoadedApps) of
-        false ->
-            restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, Attempts - 1);
-        true ->
-            OldRunningApps = running_apps(),
-            OldLoadedApps = loaded_apps(),
-            ok
-    end.
-
-unexpectedly_running_apps(OldRunningApps) ->
-    running_apps() -- OldRunningApps.
-
-unexpectedly_loaded_apps(OldLoadedApps) ->
-    loaded_apps() -- OldLoadedApps.
+    BadRunningApps = running_apps() -- OldRunningApps,
+    lists:foreach(fun(A) -> ok = application:stop(A) end, BadRunningApps),
+    BadLoadedApps = loaded_apps() -- OldLoadedApps,
+    lists:foreach(fun(A) -> ok = application:unload(A) end, BadLoadedApps),
+    OldRunningApps = running_apps(),
+    OldLoadedApps = loaded_apps(),
+    ok.
