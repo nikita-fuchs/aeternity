@@ -138,9 +138,10 @@ config_setup() ->
     {OldLoadedApps, StartedApps, [aeu_env]}.
 
 cleanup({OldLoadedApps, StartedApps, Mocks}) ->
+    [meck:unload(M) || M <- Mocks],
     [application:stop(A) || A <- lists:reverse(StartedApps)],
     lists:foreach(fun(A) -> ok = application:unload(A) end, loaded_apps() -- OldLoadedApps),
-    [meck:unload(M) || M <- Mocks].
+    ok.
 
 create_metrics() ->
     [exometer:new(N, T, O)
