@@ -10,8 +10,8 @@
 
 read_config_test_() ->
     [{foreach,
-      fun config_setup/0,
-      fun cleanup/1,
+      fun setup/0,
+      fun teardown/1,
       [
        {"basic prefix filtering", fun prefix_filter/0}
      , {"PT #154133896", fun system_log_only/0}
@@ -130,14 +130,14 @@ set_config(Rules) ->
                         {ok, Rules}
                 end).
 
-config_setup() ->
+setup() ->
     OldLoadedApps = loaded_apps(),
     {ok, StartedApps} = application:ensure_all_started(exometer_core),
     create_metrics(),
     meck:new(aeu_env, [passthrough]),
     {OldLoadedApps, StartedApps, [aeu_env]}.
 
-cleanup({OldLoadedApps, StartedApps, Mocks}) ->
+teardown({OldLoadedApps, StartedApps, Mocks}) ->
     [meck:unload(M) || M <- Mocks],
     [application:stop(A) || A <- lists:reverse(StartedApps)],
     lists:foreach(fun(A) -> ok = application:unload(A) end, loaded_apps() -- OldLoadedApps),
