@@ -56,12 +56,16 @@ start_statsd_loggers(Config0) ->
     ct:log("PortMap = ~p", [PortMap]),
     Loggers0 = proplists:get_value(loggers, Config, []),
     ct:log("Loggers0 = ~p", [Loggers0]),
+    OldLoadedApps = application:loaded_applications(),
+    {ok, StartedApps} = application:ensure_all_started(exometer_core),
     Loggers1 = lists:foldl(
                  fun({Id, Port}, Acc) ->
                          start_statsd_logger_(Id, Port, Acc)
                  end, Loggers0, PortMap),
     ct:log("Loggers1 = ~p", [Loggers1]),
-    lists:keystore(loggers, 1, Config, {loggers, Loggers1}).
+    Config1 = lists:keystore(loggers, 1, Config, {loggers, Loggers1}),
+    Config2 = lists:keystore(started_apps, 1, Config1, {started_apps, StartedApps}),
+    lists:keystore(old_loaded_apps, 1, Config2, {old_loaded_apps, OldLoadedApps}).
 
 start_statsd_logger_(Id, Port, Loggers) ->
     case lists:keyfind(Id, 1, Loggers) of
@@ -74,7 +78,6 @@ start_statsd_logger_(Id, Port, Loggers) ->
                                                       {new_port, Port}]})
             end;
         false ->
-            application:ensure_all_started(exometer_core),
             {ok, Pid} = exometer_report_logger:new([{id, Id},
                                                     {input, [{mode, udp},
                                                              {port, Port}]},
@@ -83,10 +86,15 @@ start_statsd_logger_(Id, Port, Loggers) ->
                    {pid, Pid}]} | Loggers]
     end.
 
-stop_statsd_loggers(_Config) ->
+stop_statsd_loggers(Config) ->
     Children = supervisor:which_children(exometer_report_logger_sup),
     ct:log("Logger Children = ~p", [Children]),
     [ok = stop_logger(C) || C <- Children],
+    StartedApps = proplists:get_value(started_apps, Config, []),
+    OldLoadedApps = proplists:get_value(old_loaded_apps, Config, []),
+    LoadedApps = [A || {A, _, _} <- application:loaded_applications()],
+    [application:stop(A) || A <- lists:reverse(StartedApps)],
+    lists:foreach(fun(A) -> ok = application:unload(A) end, LoadedApps -- OldLoadedApps),
     ok.
 
 stop_logger({_, Pid, _, _} = Child) ->
