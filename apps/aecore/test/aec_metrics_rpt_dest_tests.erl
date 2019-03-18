@@ -131,7 +131,7 @@ set_config(Rules) ->
                 end).
 
 config_setup() ->
-    OldLoadedApps = application:loaded_applications(),
+    OldLoadedApps = loaded_apps(),
     {ok, StartedApps} = application:ensure_all_started(exometer_core),
     create_metrics(),
     meck:new(aeu_env, [passthrough]),
@@ -199,5 +199,8 @@ receive_downs([H|T]) ->
     after 2000 ->
             error({shutdown_timeout, [H|T]})
     end.
+
+loaded_apps() ->
+    lists:map(fun({A,_,_}) -> A end, application:loaded_applications()).
 
 -endif.

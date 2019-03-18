@@ -13,7 +13,7 @@ persisted_valid_gen_block_test_() ->
              meck:new(aec_jobs_queues, [passthrough]),
              meck:expect(aec_jobs_queues, start, 0, ok),
              lager:start(),
-             {running_applications(), application:loaded_applications()}
+             {running_apps(), loaded_apps()}
      end,
      fun({OldRunningApps, OldLoadedApps}) ->
              ok = restore_stopped_and_unloaded_apps(OldRunningApps, OldLoadedApps),
@@ -34,8 +34,11 @@ persisted_valid_gen_block_test_() ->
        end}
      ]}.
 
-running_applications() ->
+running_apps() ->
     lists:map(fun({A,_,_}) -> A end, application:which_applications()).
+
+loaded_apps() ->
+    lists:map(fun({A,_,_}) -> A end, application:loaded_applications()).
 
 restore_stopped_and_unloaded_apps(OldRunningApps, OldLoadedApps) ->
     restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, 1).
@@ -49,13 +52,13 @@ restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, Attempts) ->
         false ->
             restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, Attempts - 1);
         true ->
-            OldRunningApps = running_applications(),
+            OldRunningApps = running_apps(),
             OldLoadedApps = application:loaded_applications(),
             ok
     end.
 
 unexpectedly_running_apps(OldRunningApps) ->
-    running_applications() -- OldRunningApps.
+    running_apps() -- OldRunningApps.
 
 unexpectedly_loaded_apps(OldLoadedApps) ->
-    application:loaded_applications() -- OldLoadedApps.
+    loaded_apps() -- OldLoadedApps.
