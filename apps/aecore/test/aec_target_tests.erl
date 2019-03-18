@@ -15,8 +15,8 @@
 
 target_adj_test_() ->
     {setup,
-     fun setup_target/0,
-     fun teardown_target/1,
+     fun setup/0,
+     fun teardown/1,
      [{"With constant PoW capacity the target will stabilize (seed = " ++ integer_to_list(S) ++ ")",
       fun() ->
           Seed = {1, S, S},
@@ -42,17 +42,20 @@ target_adj_test_() ->
       end} || S <- lists:seq(1, 10) ]
      }.
 
-setup_target() ->
-    setup(),
+setup() ->
+    OldLoadedApps = [A || {A, _, _} <- application:loaded_applications()],
+    {ok, StartedApps} = application:ensure_all_started(aeutils),
     meck:new(aec_txs_trees, [passthrough]),
     meck:new(aec_conductor, [passthrough]),
     meck:expect(aec_txs_trees, from_txs, fun([]) -> fake_txs_tree end),
-    meck:expect(aec_txs_trees, root_hash, fun(fake_txs_tree) -> {ok, ?FAKE_TXS_TREE_HASH} end).
+    meck:expect(aec_txs_trees, root_hash, fun(fake_txs_tree) -> {ok, ?FAKE_TXS_TREE_HASH} end),
+    {OldLoadedApps, StartedApps, [aec_txs_trees, aec_conductor]}.
 
-teardown_target(X) ->
-    meck:unload(aec_txs_trees),
-    meck:unload(aec_conductor),
-    teardown(X).
+teardown({OldLoadedApps, StartedApps, Mocks}) ->
+    [meck:unload(M) || M <- Mocks],
+    [application:stop(A) || A <- lists:reverse(StartedApps)],
+    [ok = application:unload(A) || A <- [A0 || {A0, _, _} <- application:loaded_applications()] -- OldLoadedApps],
+    ok.
 
 mine_blocks_only_chain(Chain, N, PC) ->
     aec_test_utils:blocks_only_chain(mine_chain_with_state(Chain, N, PC)).
@@ -90,10 +93,3 @@ mine(Difficulty, N) ->
 %% Human readable difficulty
 hr_difficulty(Block) ->
     aec_blocks:difficulty(Block) / ?DIFFICULTY_INTEGER_FACTOR.
-
-setup() ->
-    application:start(crypto).
-
-teardown(_) ->
-    application:stop(crypto).
-
