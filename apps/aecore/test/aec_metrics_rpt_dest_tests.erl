@@ -139,7 +139,7 @@ config_setup() ->
 
 cleanup({OldLoadedApps, StartedApps, Mocks}) ->
     [application:stop(A) || A <- lists:reverse(StartedApps)],
-    lists:foreach(fun(A) -> ok = application:unload(A) end, application:loaded_applications() -- OldLoadedApps),
+    lists:foreach(fun(A) -> ok = application:unload(A) end, loaded_apps() -- OldLoadedApps),
     [meck:unload(M) || M <- Mocks].
 
 create_metrics() ->

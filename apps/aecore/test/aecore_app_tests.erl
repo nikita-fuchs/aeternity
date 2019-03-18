@@ -53,7 +53,7 @@ restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, Attempts) ->
             restore_stopped_and_unloaded_apps_(OldRunningApps, OldLoadedApps, Attempts - 1);
         true ->
             OldRunningApps = running_apps(),
-            OldLoadedApps = application:loaded_applications(),
+            OldLoadedApps = loaded_apps(),
             ok
     end.
 
