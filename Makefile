@@ -327,7 +327,7 @@ clean:
 	@$(MAKE) multi-distclean
 	@rm -rf .eqc-info current_counterexample.eqc
 	@rm -rf eqc-plain eqc-system-test
-	@rm -rf _build/system_test+eqc+test _build/system_test+test+eqc _build/system_test+test _build/system_test _build/test _build/prod _build/local
+	@rm -rf _build/system_test+eqc_st+test _build/system_test+test+eqc_st _build/system_test+test _build/system_test _build/test _build/prod _build/local
 	@rm -rf _build/default/plugins
 	@rm -rf $$(ls -d _build/default/lib/* | grep -v '[^_]rocksdb') ## Dependency `rocksdb` takes long to build.
 
@@ -386,11 +386,11 @@ EQC_ST_DIR = system-test
 
 .PHONY: quickcheck-plain-test
 quickcheck-plain-test: eqc-plain-test
-	$(REBAR) as test,eqc eqc --dir no_eqc_dir
+	$(REBAR) as test,eqc_nost eqc --dir no_eqc_dir
 
 .PHONY: quickcheck-system-test
 quickcheck-system-test: eqc-system-test
-	$(REBAR) as system_test,test,eqc eqc --dir no_eqc_dir
+	$(REBAR) as system_test,test,eqc_st eqc --dir no_eqc_dir
 
 .PHONY: eqc-plain
 eqc-plain: eqc
