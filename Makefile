@@ -384,6 +384,10 @@ EQC_TEST_REPO = https://github.com/Quviq/epoch-eqc.git
 EQC_TEST_VERSION = 7284e0ba029849ca9bb485b27cc0ac02495d205f
 EQC_ST_DIR = system-test
 
+.PHONY: quickcheck-plain-test
+quickcheck-plain-test: eqc-plain-test
+	$(REBAR) as test,eqc eqc --dir no_eqc_dir
+
 .PHONY: quickcheck-system-test
 quickcheck-system-test: eqc-system-test
 	$(REBAR) as system_test,test,eqc eqc --dir no_eqc_dir
