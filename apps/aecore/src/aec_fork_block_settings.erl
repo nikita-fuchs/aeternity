@@ -104,7 +104,8 @@ pre_iris_map_ordering() ->
 
 -spec preset_accounts(accounts | extra_accounts, aec_hard_forks:protocol_vsn(), atom()) -> list().
 preset_accounts(Type, Release, ErrorMsg) ->
-    case read_preset(Type, Release) of
+
+    case not aeu_plugins:is_dev_mode() andalso read_preset(Type, Release) of
         {error, {_Err, PresetAccountsFile}} ->
             % no setup, no preset accounts
             erlang:error({ErrorMsg, PresetAccountsFile});
@@ -127,8 +128,28 @@ preset_accounts(Type, Release, ErrorMsg) ->
                     end,
                     DecodedData),
             % ensure deterministic ordering of accounts
+            io:fwrite("---> returned from preset_accounts: ~p ~n", [lists:keysort(1, Accounts)]),
             lists:keysort(1, Accounts)
+        end,
+
+    case aeu_plugins:is_dev_mode() of
+        true ->
+            lager:info("Generating accounts for devmode plugin"),
+            AccountList = 
+                try aeu_acc_generator:generate_accounts() of
+                    #{nodeFormat := Accs} when is_list(Accs) -> Accs
+                catch
+                    _:_ -> 
+                         erlang:error(failed_generating_devmode_accs)
+                end,
+            io:fwrite("---> Generated accounts for node: ~p ~n", [AccountList]),
+            AccountList;
+        false -> ok;
+        _ -> 
+            erlang:error(aeu_plugins_is_dev_mode_not_returning_properly)
     end.
+        
+
 
 -spec read_preset(accounts | extra_accounts, aec_hard_forks:protocol_vsn()) ->
         {ok, binary()}| {error, {atom(), string()}}.

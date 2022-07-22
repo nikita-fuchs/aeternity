@@ -65,3 +65,4 @@ eqc
 nohup.out
 data.aeternity_ct@localhost/
 eunit_report/*.xml
+.history
