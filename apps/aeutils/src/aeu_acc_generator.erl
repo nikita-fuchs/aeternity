@@ -20,7 +20,7 @@ generate_accounts(Quantity, Balance) ->
     generate_from_mnemonic(Mnemonic, Quantity, Balance).
 
 derive_from_seed(Seed, Quantity) ->
-    [ eaex10:derive_aex10_from_seed(Seed, 0, Index) || Index <- lists:seq(0, Quantity)].
+    [ eaex10:derive_aex10_from_seed(Seed, 0, Index) || Index <- lists:seq(1, Quantity)].
 
 %% the node, the devmode internals and the devmode's public data need different formats of the account data. combining at least the latter 2 will be worked on next.
 to_all_formats(ListOfDerivedKeys, Balance) ->

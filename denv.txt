@@ -1,0 +1,2 @@
+AE__SYSTEM__DEV_MODE=true
+AE__SYSTEM__PLUGINS=[{"name":"aeplugin_dev_mode"}]

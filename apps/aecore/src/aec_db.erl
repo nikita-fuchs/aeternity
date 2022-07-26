@@ -244,6 +244,26 @@ persisted_valid_genesis_block() ->
             end
     end.
 
+%persisted_valid_genesis_block() ->
+%    case aeu_plugins:is_dev_mode() orelse not application:get_env(aecore, persist, ?PERSIST)  of
+%        true ->
+%            lager:info("Skipping genesis block check because chain either not persisted or in devmode"),
+%            true;
+%        false ->
+%            ExpectedGH = aec_consensus:get_genesis_hash(),
+%            case aec_db:get_genesis_hash() of
+%                undefined ->
+%                    lager:info("Loaded empty persisted chain"),
+%                    true;
+%                ExpectedGH ->
+%                    true;
+%                LoadedGH ->
+%                    lager:warning("Expected genesis block hash ~p, persisted genesis block hash ~p",
+%                                    [ExpectedGH, LoadedGH]),
+%                    false
+%            end
+%    end.
+
 backend_mode() ->
     case application:get_env(aecore, persist, ?PERSIST) of
         false -> expand_mode(ram);
