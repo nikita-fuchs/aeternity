@@ -13,7 +13,7 @@ generate_from_mnemonic(Mnemonic, Quantity, Balance) ->
 %%KEYS EINFACH RETURNEN !
 
 generate_accounts() ->
-    generate_accounts(2, 10000000000000000000000000000000).
+    generate_accounts(10, 10000000000000000000000000000000).
 
 generate_accounts(Quantity, Balance) ->
     Mnemonic = ebip39:generate_mnemonic(128),

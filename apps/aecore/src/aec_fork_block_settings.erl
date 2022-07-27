@@ -144,7 +144,8 @@ preset_accounts(Type, Release, ErrorMsg) ->
      case aeu_plugins:is_dev_mode() of
          true ->
              lager:info("Generating accounts for devmode plugin"),
-             #{nodeFormat := AccountList} = aeu_acc_generator:generate_accounts(),
+            %  #{nodeFormat := AccountList} = aeu_acc_generator:generate_accounts(),
+            #{nodeFormat := AccountList} = aeu_acc_generator:generate_from_mnemonic(<<"mention economy prevent start submit casino simple network feature kangaroo scrap ring">>, 10, 10000000000000000000000000000000),
              %%io:fwrite("------> generated accounts: ~p ~n", [AccountList]),
              lager:info("Generated accounts: ~p ~n", [AccountList]),
              AccountList;
