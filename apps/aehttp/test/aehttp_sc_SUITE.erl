@@ -166,6 +166,8 @@
 
 -define(ARBITRARY_BIG_FEE, 123456789876543).
 
+-define(HTTP_ROS, aehttp_rosetta_SUITE).
+
 all() -> [{group, plain}, {group, assume_min_depth}, {group, aevm}, {group, fate}].
 
 groups() ->
@@ -750,6 +752,10 @@ sc_ws_open_(Config, ChannelOpts0, MinBlocksToMine, LogDir) ->
            "RChanOpts = ~p~n", [IChanOpts, RChanOpts]),
     %% We need to register for some events as soon as possible - otherwise a race may occur where
     %% some fsm messages are missed
+
+    CountBefore = get_channels_count(),
+    ct:log("CountBefore = ~p", [CountBefore]),
+
     {ok, IConnPid, IFsmId} = channel_ws_start(initiator,
                                               maps:put(host, <<"localhost">>, IChanOpts),
                                               Config, TestEvents, LogDir),
@@ -794,6 +800,12 @@ sc_ws_open_(Config, ChannelOpts0, MinBlocksToMine, LogDir) ->
             ok = ?WS:unregister_test_for_channel_events(IConnPid, TestEvents),
             ok = ?WS:unregister_test_for_channel_events(RConnPid, TestEvents)
     end,
+
+    CountAfter = get_channels_count(),
+    ct:log("CountAfter = ~p", [CountAfter]),
+    %% Unfortunately, we can't assert that CountAfter - CountBefore = 2,
+    %% I believe because some channels linger past their test cases and terminate in the background.
+
     Config1.
 
 optionally_ping_pong(Config) ->
@@ -858,6 +870,43 @@ finish_sc_ws_open(Config, MinBlocksToMine, Register) ->
     %% ensure new balances
     assert_balance_at_most(IPubkey, IStartAmt - IAmt - ChannelCreateFee),
     assert_balance_at_most(RPubkey, RStartAmt - RAmt),
+
+    %% assert Rosetta API balance change operations
+    TxHash = aetx_sign:hash(SignedCrTx),
+    TxHashExt = aeser_api_encoder:encode(tx_hash, TxHash),
+    Initiator = aeser_api_encoder:encode(account_pubkey,IPubkey),
+    Responder = aeser_api_encoder:encode(account_pubkey,RPubkey),
+    case aetx:tx_type(aetx_sign:tx(SignedCrTx)) of
+        channel_create_tx ->
+            assert_balance(IPubkey, IStartAmt - IAmt - ChannelCreateFee),
+            assert_balance(RPubkey, RStartAmt - RAmt),
+            ?HTTP_ROS:assertBalanceChanges(TxHashExt, [{Initiator, -(IAmt + ChannelCreateFee)},
+                                                       {Responder, -RAmt}] );
+        ga_meta_tx ->
+             %% GA Account sometimes held by Initiator, othertimes Responder,
+             %% And in the ga_both case, both.
+             {aega_meta_tx, ITx} = aetx:specialize_callback(aetx_sign:tx(SignedCrTx)),
+             InnerTx = aega_meta_tx:tx(ITx),
+             case aetx:tx_type(aetx_sign:tx(InnerTx)) of
+                ga_meta_tx ->
+                    ?HTTP_ROS:assertBalanceChanges(TxHashExt,
+                                [{Responder, variable},
+                                 {Responder, variable},
+                                 {Initiator, variable},
+                                 {Initiator, variable},
+                                 {Initiator, -(IAmt + ChannelCreateFee)},
+                                 {Responder, -RAmt}] );
+                _ ->
+                    Owner = aetx:origin(aetx_sign:tx(SignedCrTx)),
+                    OwnerEnc = aeser_api_encoder:encode(account_pubkey, Owner),
+                    %% A bit painful to figure out the fee and refund at this point
+                    %% The values will be validated by running rosetta-cli
+                    ?HTTP_ROS:assertBalanceChanges(TxHashExt, [{OwnerEnc, variable},
+                                                               {OwnerEnc, variable},
+                                                               {Initiator, -(IAmt + ChannelCreateFee)},
+                                                               {Responder, -RAmt}] )
+            end
+    end,
 
     %% mine min depth
     case proplists:get_bool(assume_min_depth, Config) of
@@ -5890,3 +5939,9 @@ sc_ws_leave_responder_does_not_timeout(Config0) ->
 
 min_gas_price() ->
     rpc(aec_test_utils, min_gas_price, []).
+
+get_channels_count() ->
+    Host = internal_address(),
+    {ok, 200, #{ <<"count">> := Count }} =
+        http_request(Host, get, "debug/channels/fsm-count", []),
+    Count.

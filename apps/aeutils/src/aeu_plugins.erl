@@ -3,6 +3,7 @@
 -export([load_plugins/0]).
 
 -export([ check_config/3
+        , find_config/3
         , validate_config/2
         , is_dev_mode/0
         , suggest_config/2 ]).
@@ -17,14 +18,16 @@ check_config(PluginName, SchemaFilename, OsEnvPrefix) ->
                 [Config] ->
                     Schema = load_schema(SchemaFilename),
                     {ok, Config1} = validate(Config, Schema),
-                    case aeu_env:apply_os_env(OsEnvPrefix, Schema, Config1) of
-                        no_change ->
-                            Config1;
-                        {error, E} ->
-                            error(E);
-                        Config2 when is_map(Config2) ->
-                            Config2
-                    end;
+                    Result = case aeu_env:apply_os_env(OsEnvPrefix, Schema, Config1) of
+                                 no_change ->
+                                     Config1;
+                                 {error, E} ->
+                                     error(E);
+                                 Config2 when is_map(Config2) ->
+                                     Config2
+                             end,
+                    cache_plugin_schema(NameBin, Schema),
+                    Result;
                 [] ->
                     lager:warning("Could not fetch plugin config object (~p)",
                                   [PluginName]),
@@ -36,6 +39,39 @@ check_config(PluginName, SchemaFilename, OsEnvPrefix) ->
             not_found
     end.
 
+%% Look up a user config value for a specific plugin.
+%% Key is a list of binaries, corresponding to the plugin config schema
+%% For top-level config variables, this would be a list of length 1, Example:
+%%
+%% find_config(<<"aeplugin_dev_mode">>,
+%%             [<<"microblock_interval">>],
+%%             [user_config, schema_default])
+%%
+%% Path is a list of lookup types, in priority order:
+%% * user_config - check for user-provided config data
+%% * schema_default - If a default value is configured in the config schema
+%% * {env, Application, Key} - Application environment value, if configured
+%% * {value, V} - A (constant) default value.
+%%
+find_config(PluginName, Key, Path) when is_list(Key), is_list(Path) ->
+    PluginNameBin = bin(PluginName),
+    find_config_(PluginNameBin, Key, Path).
+
+find_config_(PluginName, Key, [H|T]) ->
+    case find_config_step(PluginName, Key, H) of
+        undefined -> find_config_(PluginName, Key, T);
+        {ok, _} = Ok -> Ok
+    end;
+find_config_(_, _, []) ->
+    undefined.
+
+find_config_step(PluginName, Key, user_config) ->
+    aeu_env:find_config([<<"system">>, <<"plugins">>,
+                         {<<"name">>, PluginName, <<"config">>} | Key], [user_config]);
+find_config_step(PluginName, Key, schema_default) ->
+    aeu_env:schema_default(Key, cached_plugin_schema(PluginName));
+find_config_step(_, Key, Step) ->
+    aeu_env:find_config(Key, [Step]).
 
 validate_config(JSON, SchemaFilename) ->
     Schema = load_schema(SchemaFilename),
@@ -47,14 +83,7 @@ is_dev_mode() ->
 %% Checks if a given config key (list of binary keys corresponding to the AE
 %% config schema) is already configured. If not, the suggested value is used.
 suggest_config(Key, Value) ->
-    case aeu_env:user_config(Key) of
-        {ok, _} ->
-            {error, already_configured};
-        undefined ->
-            Map = kv_to_config_map(Key, Value),
-            aeu_env:update_config(Map, false),
-            ok
-    end.
+    aeu_env:suggest_config(Key, Value).
 
 load_schema(SchemaFilename) ->
     {ok, AppName} = application:get_application(),
@@ -76,6 +105,12 @@ load_schema(SchemaFilename) ->
 
 validate(JSON, Schema) when is_map(JSON) ->
     jesse:validate_with_schema(Schema, JSON, []).
+
+cache_plugin_schema(PluginName, Schema) ->
+    persistent_term:put({?MODULE, cached_schema, PluginName}, Schema).
+
+cached_plugin_schema(PluginName) ->
+    persistent_term:get({?MODULE, cached_schema, PluginName}).
 
 load_plugins() ->
     case aeu_env:find_config([<<"system">>, <<"plugin_path">>],
@@ -214,8 +249,3 @@ bin(B) when is_binary(B) ->
     B;
 bin(Str) ->
     iolist_to_binary(Str).
-
-kv_to_config_map([H], V) ->
-    #{H => V};
-kv_to_config_map([H|T], V) ->
-    #{H => kv_to_config_map(T, V)}.

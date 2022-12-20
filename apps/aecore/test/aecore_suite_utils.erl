@@ -48,6 +48,7 @@
          wait_for_tx_in_pool/2,
          wait_for_tx_in_pool/3,
          wait_for_height/2,
+         wait_for_height/3,
          flush_new_blocks/0,
          spend/5,         %% (Node, FromPub, ToPub, Amount, Fee) -> ok
          sign_on_node/2,
@@ -86,13 +87,16 @@
          rpc/3,
          rpc/4,
          use_swagger/1,
+         use_rosetta/0,
          http_request/4,
          httpc_request/4,
          http_api_version/0,
          http_api_prefix/0,
          process_http_return/1,
          internal_address/0,
-         external_address/0
+         external_address/0,
+         rosetta_address/0,
+         rosetta_offline_address/0
         ]).
 
 -export([generate_key_pair/0]).
@@ -496,7 +500,9 @@ create_config(Node, CTConfig, CustomConfig, Options) ->
     Ports =
         #{ <<"sync">> => #{ <<"port">> => sync_port(Node)},
            <<"http">> => #{ <<"external">> => #{<<"port">> => external_api_port(Node)},
-                            <<"internal">> => #{<<"port">> => internal_api_port(Node)}},
+                            <<"internal">> => #{<<"port">> => internal_api_port(Node)},
+                            <<"rosetta">> => #{<<"port">> => rosetta_api_port(Node)},
+                            <<"rosetta_offline">> => #{<<"port">> => rosetta_offline_api_port(Node)}},
            <<"websocket">> => #{<<"channel">> => #{<<"port">> => ws_port(Node)}}},
     MergedCfg5 = maps_merge(MergedCfg4, Ports),
 
@@ -528,7 +534,7 @@ make_multi(Config, NodesList) ->
 
 make_multi(Config, NodesList, RefRebarProfile) ->
     ct:log("RefRebarProfile = ~p", [RefRebarProfile]),
-    Top = ?config(top_dir, Config),
+    Top = proplists:get_value(top_dir, Config),
     ct:log("Top = ~p", [Top]),
     Root = filename:join(Top, "_build/" ++ RefRebarProfile ++ "/rel/aeternity"),
     [setup_node(N, Top, Root, Config) || N <- NodesList].
@@ -586,6 +592,7 @@ reinit_with_bitcoin_ng(N) ->
     ok = rpc:call(Node, aec_conductor, reinit_chain, []).
 
 reinit_nodes_with_ct_consensus(Nodes) ->
+    ct:log("Reinitializing chain on ~p with ct_tests consensus", [Nodes]),
     NodeNames = [node_name(N) || N <- Nodes],
     Timeout = 5000,
     [{ok, maintenance} = rpc:call(NN, app_ctrl, set_and_await_mode, [maintenance, Timeout])
@@ -598,10 +605,7 @@ reinit_nodes_with_ct_consensus(Nodes) ->
     ok.
 
 reinit_with_ct_consensus(N) ->
-    ct:log("Reinitializing chain on ~p with ct_tests consensus", [N]),
-    Node = node_name(N),
-    ok = set_env(Node, aecore, consensus, #{<<"0">> => #{<<"name">> => <<"ct_tests">>}}),
-    ok = rpc:call(Node, aec_conductor, reinit_chain, []).
+    reinit_nodes_with_ct_consensus([N]).
 
 get_node_db_config(Rpc) when is_function(Rpc, 3) ->
     IsDbPersisted = Rpc(application, get_env, [aecore, persist, false]),
@@ -799,7 +803,7 @@ mine_blocks_loop(Cnt, Type) ->
 mine_blocks_loop(Blocks, 0, _Type) ->
     {ok, Blocks};
 mine_blocks_loop(Blocks, BlocksToMine, Type) when is_integer(BlocksToMine), BlocksToMine > 0 ->
-    {ok, Block} = wait_for_new_block(),
+    {ok, Block} = wait_for_new_block_mined(),
     case aec_blocks:type(Block) of
         Type1 when Type =/= any andalso Type =/= Type1 ->
             %% Don't decrement
@@ -808,10 +812,10 @@ mine_blocks_loop(Blocks, BlocksToMine, Type) when is_integer(BlocksToMine), Bloc
             mine_blocks_loop([Block | Blocks], BlocksToMine - 1, Type)
     end.
 
-wait_for_new_block() ->
-    wait_for_new_block(30000).
+wait_for_new_block_mined() ->
+    wait_for_new_block_mined(30000).
 
-wait_for_new_block(T) when is_integer(T), T >= 0 ->
+wait_for_new_block_mined(T) when is_integer(T), T >= 0 ->
     receive
         {gproc_ps_event, block_created, Info} ->
             #{info := Block} = Info,
@@ -832,29 +836,58 @@ wait_for_new_block(T) when is_integer(T), T >= 0 ->
             {error, timeout_waiting_for_block}
     end.
 
+wait_for_new_block() ->
+    wait_for_new_block(30000).
+
+wait_for_new_block(T) when is_integer(T), T >= 0 ->
+    receive
+        {gproc_ps_event, top_changed, #{info := #{block_hash := _Hash}}} ->
+            ok
+    after
+        T ->
+            case T of
+                0 ->
+                    not_logging;
+                _ ->
+                    ct:log("timeout waiting for block event~n"
+                           "~p", [process_info(self(), messages)])
+            end,
+            {error, timeout_waiting_for_block}
+    end.
+
 flush_new_blocks() ->
     flush_new_blocks_([]).
 
 flush_new_blocks_(Acc) ->
-    case wait_for_new_block(0) of
+    case wait_for_new_block_mined(0) of
         {error, timeout_waiting_for_block} ->
             lists:reverse(Acc);
         {ok, Block} ->
             flush_new_blocks_([Block | Acc])
     end.
 
+flush_new_blocks_produced() ->
+    case wait_for_new_block(0) of
+        {error, timeout_waiting_for_block} -> ok;
+        ok ->
+            flush_new_blocks_produced()
+    end.
+
+
 %% block the process until a certain height is reached
 %% this has the expectation that the Node is mining
 %% there is a timeout of 30 seconds for a single block to be produced
 wait_for_height(Node, Height) ->
-    flush_new_blocks(),
-    subscribe(Node, block_created),
-    subscribe(Node, micro_block_created),
-    wait_for_height_(Node, Height),
-    unsubscribe(Node, block_created),
-    unsubscribe(Node, micro_block_created).
+    wait_for_height(Node, Height, 30000).
 
-wait_for_height_(Node, Height) ->
+wait_for_height(Node, Height, TimeoutPerBlock) ->
+    flush_new_blocks_produced(),
+    subscribe(Node, top_changed),
+    ok = wait_for_height_(Node, Height, TimeoutPerBlock),
+    unsubscribe(Node, top_changed),
+    ok.
+
+wait_for_height_(Node, Height, TimeoutPerBlock) ->
     TopHeight =
         case rpc:call(Node, aec_chain, top_header, []) of
             undefined -> 0;
@@ -864,8 +897,12 @@ wait_for_height_(Node, Height) ->
         true -> % reached height
             ok;
         false ->
-            _ = wait_for_new_block(),
-            wait_for_height_(Node, Height)
+            case wait_for_new_block(TimeoutPerBlock) of
+                {error, timeout_waiting_for_block} ->
+                    {error, timeout_waiting_for_block, {top, TopHeight}, {waiting_for, Height}};
+                ok ->
+                    wait_for_height_(Node, Height, TimeoutPerBlock)
+            end
     end.
 
 spend(Node, FromPub, ToPub, Amount, Fee) ->
@@ -1503,6 +1540,14 @@ internal_api_port(Node) ->
     {NodeGroup, Idx} = split_node_name(Node),
     port_group(NodeGroup) + Idx * 10 + 103. %% dev1: 3113
 
+rosetta_api_port(Node) ->
+    {NodeGroup, Idx} = split_node_name(Node),
+    port_group(NodeGroup) + Idx * 10 + 203. %% dev1: 3213
+
+rosetta_offline_api_port(Node) ->
+    {NodeGroup, Idx} = split_node_name(Node),
+    port_group(NodeGroup) + Idx * 10 + 403. %% dev1: 3413
+
 ws_port(Node) ->
     {NodeGroup, Idx} = split_node_name(Node),
     port_group(NodeGroup) + Idx * 10 + 4. %% dev1: 3014
@@ -1689,6 +1734,9 @@ use_swagger(SpecVsn) ->
         end,
     put(api_prefix, Prefix).
 
+use_rosetta() ->
+    put(api_prefix, "/").
+
 get(Key, Default) ->
     case get(Key) of
         undefined -> Default;
@@ -1804,11 +1852,27 @@ external_address() ->
                 aehttp, [external, port], 8043]),
     "http://127.0.0.1:" ++ integer_to_list(Port).     % good enough for requests
 
+rosetta_address() ->
+    Port = rpc(aeu_env, user_config_or_env,
+              [ [<<"http">>, <<"rosetta">>, <<"port">>],
+                aehttp, [rosetta, port], 8243]),
+    "http://127.0.0.1:" ++ integer_to_list(Port).
+
+rosetta_offline_address() ->
+    Port = rpc(aeu_env, user_config_or_env,
+              [ [<<"http">>, <<"rosetta_offline">>, <<"port">>],
+                aehttp, [rosetta_offline, port], 8343]),
+    "http://127.0.0.1:" ++ integer_to_list(Port).
+
 rpc(Mod, Fun, Args) ->
     rpc(?DEFAULT_NODE, Mod, Fun, Args).
 
 rpc(Node, Mod, Fun, Args) ->
-    rpc:call(node_name(Node), Mod, Fun, Args, 5000).
+    case rpc:call(node_name(Node), Mod, Fun, Args, 5000) of
+        {badrpc, Reason} ->
+            error({badrpc, Reason});
+        R -> R
+    end.
 
 generate_key_pair() ->
     #{ public := Pubkey, secret := Privkey } = enacl:sign_keypair(),

@@ -24,6 +24,7 @@
 -define(MINERVA_DIR, ".minerva").
 -define(FORTUNA_DIR, ".fortuna").
 -define(LIMA_DIR,    ".lima").
+-define(IRIS_DIR,    ".iris").
 -define(CERES_DIR,   ".ceres").
 
 -spec dir(aec_hard_forks:protocol_vsn()) -> string().
@@ -34,6 +35,7 @@ dir(ProtocolVsn) ->
             ?MINERVA_PROTOCOL_VSN -> ?MINERVA_DIR;
             ?FORTUNA_PROTOCOL_VSN -> ?FORTUNA_DIR;
             ?LIMA_PROTOCOL_VSN    -> ?LIMA_DIR;
+            ?IRIS_PROTOCOL_VSN    -> ?IRIS_DIR;
             ?CERES_PROTOCOL_VSN   -> ?CERES_DIR
         end,
     filename:join(aeu_env:data_dir(aecore), Dir).
@@ -251,7 +253,19 @@ read_preset_contracts(?LIMA_PROTOCOL_VSN = Release) ->
     end.
 
 accounts_file_name(Release) ->
-    filename:join([dir(Release), accounts_json_file()]).
+    case os:getenv("AE__SYSTEM__CUSTOM_PREFUNDED_ACCS_FILE") of
+        false ->
+            filename:join([dir(Release), accounts_json_file()]);
+        CustomAccsFilePath -> 
+            case filelib:is_file(CustomAccsFilePath) of 
+                true ->
+                    lager:info("Custom file for prefunded accounts provided: ~p ~n", [CustomAccsFilePath]),
+                    CustomAccsFilePath;
+                false ->
+                    lager:info("Invalid path to file with prefunded accounts provided: File not found.: ~p ~n", [CustomAccsFilePath]),
+                    erlang:error({provided_accounts_file_not_found, CustomAccsFilePath})
+            end
+    end.
 
 extra_accounts_file_name(Release) ->
     filename:join([dir(Release), extra_accounts_json_file()]).

@@ -55,6 +55,7 @@ forbidden(Mod, OpId) ->
     end.
 
 queue('GetNetworkStatus') -> ?READ_Q;
+queue('GetChannelsFsmCount') -> ?READ_Q;
 queue(_)                  -> ?WRITE_Q.
 
 -spec handle_request(
@@ -293,6 +294,10 @@ handle_request_('GetCheckTxInPool', Req, _Context) ->
                 ],
     process_request(ParseFuns, Req);
 
+handle_request_('GetChannelsFsmCount', _Req, _Context) ->
+    FsmCount = aesc_fsm:count_active_fsms(),
+    {200, [], #{count => FsmCount}};
+
 handle_request_(OperationID, Req, Context) ->
     error_logger:error_msg(
       ">>> Got not implemented request to process: ~p~n",
@@ -342,7 +347,7 @@ produce_tx(contract_call_tx, Req) ->
                                        amount, gas, gas_price, fee, call_data]),
                  read_optional_params([{ttl, ttl, '$no_value'}]),
                  api_decode([{caller_id, caller_id, {id_hash, [account_pubkey]}},
-                                {contract_id, contract_id, {id_hash, [contract_pubkey]}}]),
+                             {contract_id, contract_id, {id_hash, [contract_pubkey, name]}}]),
                  api_str_to_int([abi_version, amount, gas, gas_price, fee, ttl]),
                  get_nonce_from_account_id(caller_id),
                  get_contract_code(contract_id, contract_code),

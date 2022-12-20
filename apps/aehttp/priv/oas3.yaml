@@ -34,7 +34,7 @@ tags:
   - name: dry-run
     description: External dry run endpoint.
   - name: node-operator
-    description: Endpoints to help the node oprator interact with the node
+    description: Endpoints to help the node operator interact with the node
 externalDocs:
   description: Find out more about Aeternity
   url: http://www.aeternity.com
@@ -1747,6 +1747,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /debug/channels/fsm-count:
+    get:
+      tags:
+        - internal
+        - node_info
+        - debug
+      operationId: GetChannelsFsmCount
+      description: Get the number of currently active State Channel FSMs
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountResponse"
   /debug/transactions/pending:
     get:
       tags:

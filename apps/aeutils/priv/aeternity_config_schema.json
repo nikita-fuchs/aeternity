@@ -12,6 +12,11 @@
                     "type" : "boolean",
                     "default" : false
                 },
+                "offline_mode" : {
+                    "description" : "When true, the node disables sync, mining, but keeps http endpoints open",
+                    "type" : "boolean",
+                    "default" : false
+                },
                 "dev_mode" : {
                     "description" : "When true, the node sets up for development (default netw id: ae_dev, default consensus: on_demand)",
                     "type" : "boolean",
@@ -1290,6 +1295,50 @@
                         }
                     }
                 },
+                "rosetta" : {
+                    "type" : "object",
+                    "additionalProperties" : false,
+                    "properties" : {
+                        "listen_address": {
+                          "description": "Listen address for rosetta interface. This can be publicly accessible, but defaults to private",
+                          "type": "string",
+                          "example": "127.0.0.1",
+                          "default" : "127.0.0.1"
+                        },
+                        "port" : {
+                            "description" : "Listen port for rosetta online HTTP interface.",
+                            "type" : "integer",
+                            "default" : 3213
+                        },
+                        "acceptors" : {
+                            "description" : "Number of acceptors in rosetta pool",
+                            "type" : "integer",
+                            "default" : 10
+                        }
+                    }
+                },
+                "rosetta_offline" : {
+                    "type" : "object",
+                    "additionalProperties" : false,
+                    "properties" : {
+                        "listen_address": {
+                          "description": "Listen address for the offline rosetta interface. This can be publicly accessible, but defaults to private",
+                          "type": "string",
+                          "example": "127.0.0.1",
+                          "default" : "127.0.0.1"
+                        },
+                        "port" : {
+                            "description" : "Listen port for the rosetta offline HTTP interface.",
+                            "type" : "integer",
+                            "default" : 3413
+                        },
+                        "acceptors" : {
+                            "description" : "Number of acceptors in rosetta offline HTTP pool",
+                            "type" : "integer",
+                            "default" : 10
+                        }
+                    }
+                },
                 "endpoints" : {
                     "gossip" : {
                         "description" : "Gossip protocol API",
@@ -1365,7 +1414,34 @@
                     "description" : "Max number of active state channel clients allowed on node",
                     "type" : "integer",
                     "default" : 1000
-                }
+                },
+		"ad_hoc_listen_ports" : {
+		    "type" : "boolean",
+		    "description" : "Whether to allow responders to listen on any ports other than preconfigured ones",
+		    "default" : true
+		},
+		"listeners" : {
+		    "description" : "Pre-configured responder listen ports",
+		    "type" : "array",
+		    "items" : {
+			"type" : "object",
+			"additionalProperties" : false,
+			"required" : [
+			    "port"
+			],
+			"properties" : {
+			    "port" : {
+				"type" : "integer",
+				"description" : "Listen port number"
+			    },
+			    "acceptors" : {
+				"type" : "integer",
+				"description" : "Number of concurrent acceptors on port (default: 1)",
+				"default" : 1
+			    }
+			}
+		    }
+		}
             }
         },
         "websocket" : {
@@ -2207,8 +2283,29 @@
                     }
                 }
             }
+        },
+        "dev_mode" : {
+            "type" : "object",
+            "description" : "Settings for when dev mode consensus is activated",
+            "additionalProperties" : false,
+            "properties" : {
+                "keyblock_interval" : {
+                    "type" : "integer",
+                    "default" : 0,
+                    "description" : "Interval, in seconds, between keyblocks. If 0, keyblocks are only produced on-demand"
+                },
+                "microblock_interval" : {
+                    "type" : "integer",
+                    "default" : 0,
+                    "description" : "Interval, in seconds, between microblocks. If 0, microblocks are only produced on-demand"
+                },
+                "auto_emit_microblocks" : {
+                    "type" : "boolean",
+                    "default" : false,
+                    "description" : "Emit microblocks as soon as transactions have been pushed to the mempool"
+                }
+            }
         }
-
     },
     "definitions" : {
         "key_value_pattern": {
