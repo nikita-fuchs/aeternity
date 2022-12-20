@@ -2303,6 +2303,20 @@
                     "type" : "boolean",
                     "default" : false,
                     "description" : "Emit microblocks as soon as transactions have been pushed to the mempool"
+                },
+                "total_accounts" : {
+                    "type" : "integer",
+                    "default" : 10,
+                    "description" : "Number of accounts to have prefilled balance at start of devmode"
+                },
+                "prefilled_balance" : {
+                    "type" : "integer",
+                    "default" : 1000,
+                    "description" : "Amount of AE that shall be prefilled in each account"
+                },
+                "mnemonic" : {
+                    "type" : "string",
+                    "description" : "A mnemonic by which to generate prefilled accounts"
                 }
             }
         }
