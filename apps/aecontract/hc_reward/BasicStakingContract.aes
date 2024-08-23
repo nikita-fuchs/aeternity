@@ -1,0 +1,49 @@
+// Basic staking contract v0.1
+
+// TODO: Withdraw function
+// In order to calculate rewards,  the contract might need for either a way to find out when this contract was rewarded/punished 
+// OR the user could have a way to provide this information, but that must have to be verifiable for completions somehow, as the user could leave out punishments for example.
+@compiler >= 6
+
+include "String.aes"
+
+contract BasicStakingContract =
+
+    record state = {
+        blockProducer : address,
+        deposits : map(address, list(deposit))
+        }
+
+    record deposit = {
+        epoch: int,
+        amount: int}
+
+    stateful entrypoint init() = 
+        {
+            blockProducer = Call.caller,
+            deposits = {}}
+
+    stateful payable entrypoint deposit() =
+        require(Call.value > 0, "Must deposit more than 0")
+        let currentDeposit : deposit = {
+            epoch = Chain.block_height,
+            amount = Call.value}
+
+        put(state{ deposits[Call.caller = []] @ deps = deps ++ [currentDeposit]})
+        true // cosmetics
+    
+    // helpers
+    entrypoint getDepositsByAddress(depositor : address) =
+        state.deposits[Call.caller = []]
+
+    entrypoint getBlockProducer() =
+        state.blockProducer
+
+    stateful entrypoint changeBlockProducer(newAddress: address) =
+        require(Call.caller == state.blockProducer, "Can only be called by the block producer.")
+        put(state{blockProducer = newAddress})
+        newAddress // cosmetics
+
+    // debug functions
+    entrypoint getState() =
+        state
